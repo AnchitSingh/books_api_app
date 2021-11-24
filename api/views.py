@@ -1,8 +1,10 @@
+from django.http.response import Http404,HttpResponseNotFound
 from django.shortcuts import render,get_object_or_404
 from django.http import HttpResponse,JsonResponse, QueryDict
 import requests
 from .models import *
 from django.views.decorators.csrf import csrf_exempt
+from ast import literal_eval
 
 @csrf_exempt 
 def home(request):
@@ -39,7 +41,9 @@ def general_data(request):
 @csrf_exempt 
 def book_api(request):
     if request.method == 'POST':
-        tok=items(isbn=request.POST.get('isbn'),name=request.POST.get('name'),country=request.POST.get('country'),number_of_pages=request.POST.get('number_of_pages'),publisher=request.POST.get('publisher'),year = int(str(request.POST.get('release_date').split('-')[0])),release_date=str(request.POST.get('release_date')))
+        if request.POST.get('release_date') == None or request.POST.get('isbn') == None or request.POST.get('name') == None or request.POST.get('country') == None or request.POST.get('number_of_pages') == None or request.POST.get('publisher') == None:
+            return HttpResponseNotFound("404")
+        tok=items(isbn=request.POST.get('isbn'),name=request.POST.get('name'),country=request.POST.get('country'),number_of_pages=request.POST.get('number_of_pages'),publisher=request.POST.get('publisher'),year = int(str((request.POST.get('release_date')).split('-')[0])),release_date=str(request.POST.get('release_date')))
         tok.save()
         auths = request.POST.getlist("authors")
         for a in auths:
@@ -116,44 +120,57 @@ def book_api(request):
             data.append(dummy)
         return JsonResponse(data,safe=False)
     else:
-        return HttpResponse('not allowed')
-    
+        return HttpResponse('Method not allowed (Only POST and GET)')
+
 
   
 @csrf_exempt 
 def book_api_patch(request,id):
     if request.method == 'PATCH':
-        payload = QueryDict(request.body)
+        try:
+            evald = literal_eval(request.body)
+            if isinstance(evald, dict):
+                payload = literal_eval(request.body)
+        except:
+            payload = QueryDict(request.body)
         tok = get_object_or_404(items, id=id)
-        tok.isbn=payload['isbn']
-        tok.name=payload['name']
-        tok.country=payload['country']
-        tok.number_of_pages=payload['number_of_pages']
-        tok.publisher=payload['publisher']
-        dt = str(payload['release_date'])
-        tok.release_date=dt
-        tok.year=int(dt.split('-')[0])
+        nm = tok.name
+        if 'isbn' in payload:
+            tok.isbn=payload['isbn'] 
+        if 'name' in payload:
+            tok.name=payload['name']
+        if 'country' in payload:
+            tok.country=payload['country']
+        if 'number_of_pages' in payload:
+            tok.number_of_pages=payload['number_of_pages']
+        if 'publisher' in payload:
+            tok.publisher=payload['publisher']
+        if 'release_date' in payload:
+            dt = str(payload['release_date'])
+            tok.release_date=dt
+            tok.year=int(dt.split('-')[0])
         tok.save()
         orignal = [i.name for i in tok.authors.all()]
-        removed_authors=list(set(orignal)-set(payload.getlist("authors")))
-        added_authors=list(set(payload.getlist("authors"))-set(orignal))
-        for word in removed_authors:
-            flag=author.objects.filter(name__exact=word).first()
-            flag.delete()
-        for word in added_authors:
-            flag=author.objects.filter(name__exact=word).first()
-            if flag:
-                flag.books.add(tok)
-                flag.save()
-            else:
-                bake=author(name=word)
-                bake.save()
-                bake.books.add(tok)
-                bake.save()
+        if "authors" in payload:
+            removed_authors=list(set(orignal)-set(payload.getlist("authors")))
+            added_authors=list(set(payload.getlist("authors"))-set(orignal))
+            for word in removed_authors:
+                flag=author.objects.filter(name__exact=word).first()
+                flag.delete()
+            for word in added_authors:
+                flag=author.objects.filter(name__exact=word).first()
+                if flag:
+                    flag.books.add(tok)
+                    flag.save()
+                else:
+                    bake=author(name=word)
+                    bake.save()
+                    bake.books.add(tok)
+                    bake.save()
         data = {}
         data['status_code'] = 200
         data['status'] = "success"
-        data['message'] = "The book "+payload['name']+" was updated successfully"
+        data['message'] = "The book "+nm+" was updated successfully"
         res = {}
         res["id"] = id
         res["name"] = tok.name
@@ -191,5 +208,5 @@ def book_api_patch(request,id):
         res["release_date"]= str(book.release_date).split('T')[0].split(' ')[0]
         dummy['data'] = [res]
         return JsonResponse(dummy,safe=False)
-    
-    
+    else:
+        return HttpResponse('Method not allowed (Only PATCH,DELETE and GET)')
