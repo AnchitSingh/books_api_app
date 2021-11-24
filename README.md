@@ -60,4 +60,4 @@ python3 manage.py test api
 ## Cloud Version
 
 This webapp is also deployed on cloud and can be accessed via [this link](http://178.18.244.251/)
-User can visit the routes with *GET* method enabled to see the various JSON outputs.
+User can visit the routes with *GET* method enabled ("/api/external-books?name=", "/api/v1/books","/api/v1/books/<id>") to see the various JSON outputs.
